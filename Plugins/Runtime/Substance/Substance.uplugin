@@ -1,0 +1,54 @@
+{
+	"FileVersion": 3,
+	"Version": 72,
+	"VersionName": "5.7.1",
+	"FriendlyName": "Substance in UE5",
+	"Description": "Adds support for Substance (sbsar) textures",
+	"Category": "Editor",
+	"CreatedBy": "Substance by Adobe",
+	"CreatedByURL": "https://www.substance3d.com/",
+	"DocsURL": "https://helpx.adobe.com/substance-3d-integrations/game-engines/unreal-engine/unreal-engine-5.html",
+	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/content/2f6439c2f9584f49809d9b13b16c2ba4",
+	"SupportURL": "",
+	"EngineVersion": "5.7.0",
+	"CanContainContent": true,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "SubstanceCore",
+			"Type": "Runtime",
+			"LoadingPhase": "PreDefault",
+			"PlatformAllowList": [
+				"Win64",
+				"Mac",
+				"Linux"
+			]
+		},
+		{
+			"Name": "SubstanceEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostDefault",
+			"PlatformAllowList": [
+				"Win64",
+				"Mac",
+				"Linux"
+			]
+		},
+		{
+			"Name": "SubstanceConnector",
+			"Type": "Editor",
+			"LoadingPhase": "PostDefault",
+			"PlatformAllowList": [
+				"Win64",
+				"Mac",
+				"Linux"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "USDImporter",
+			"Enabled": true
+		}
+	]
+}

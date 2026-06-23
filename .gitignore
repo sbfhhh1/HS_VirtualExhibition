@@ -1,0 +1,25 @@
+﻿# Unreal Engine .gitignore
+
+# Binaries
+Binaries/
+/**/*.exe
+
+# Build data
+Intermediate/
+Saved/
+Logs/
+DerivedDataCache/
+*.pdb
+
+# Visual Studio
+.vs/
+*.sln
+*.suo
+*.vcxproj*
+*.csproj*
+
+# Other
+.DS_Store
+Thumbs.db
+*.bak
+*.bak2
