@@ -4,6 +4,8 @@
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
+#include "InputCoreTypes.h"
 #include "LeapSubsystem.h"
 #include "UltraleapTrackingData.h"
 
@@ -267,5 +269,19 @@ void UFistDisplayToggleComponent::TickComponent(
 	else if (GestureStrength < ReleaseThreshold)
 	{
 		bFistLatched = false;
+	}
+
+	// 调试用：数字 4 键等价于抓取手势，触发印章/背景轮回（与冷却共享，防重复触发）。
+	if (const UWorld* World = GetWorld())
+	{
+		if (APlayerController* PlayerController = World->GetFirstPlayerController())
+		{
+			if (PlayerController->WasInputKeyJustPressed(EKeys::Four) && TriggerCooldown <= 0.0f)
+			{
+				UE_LOG(LogTemp, Display, TEXT("FistDisplayToggle: debug key '4' -> AdvanceGroup."));
+				AdvanceGroup();
+				TriggerCooldown = TriggerCooldownSeconds;
+			}
+		}
 	}
 }
