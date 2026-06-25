@@ -1,7 +1,6 @@
 ﻿#include "BurstMeshStateSwitcherComponent.h"
 
 #include "Components/AudioComponent.h"
-#include "Components/BoxComponent.h"
 #include "Components/InputComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -100,12 +99,12 @@ bool ActorMatchesConfiguredName(const AActor* Actor, const FName DesiredName)
 		return true;
 	}
 
-#if WITH_EDITOR
-	if (Actor->GetActorLabel().Equals(Desired, ESearchCase::IgnoreCase))
+	// 用真 Tag 匹配，替代仅在 WITH_EDITOR 下有效的 GetActorLabel()：
+	// 给画框 Actor 打上同名 Tag（如 "frame"）即可在打包版被正确定位。
+	if (Actor->ActorHasTag(DesiredName))
 	{
 		return true;
 	}
-#endif
 
 	return false;
 }
@@ -212,7 +211,7 @@ void UBurstMeshStateSwitcherComponent::BeginPlay()
 		StartBackgroundMusic();
 	}
 
-	UE_LOG(LogTemp, Display, TEXT("BurstMeshStateSwitcher: initialized on %s; UI and overlap triggers disabled."),
+	UE_LOG(LogTemp, Display, TEXT("BurstMeshStateSwitcher: initialized on %s; legacy UI hidden and overlap triggers preserved."),
 		*GetNameSafe(GetOwner()));
 	UE_LOG(LogTemp, Display, TEXT("BurstMeshStateSwitcher: morph system=%s, morph duration=%.2fs, particle linger=%.2fs."),
 		*GetNameSafe(MorphParticleSystem), FrontHalfDuration, ParticleFadeOutDuration);
@@ -304,6 +303,7 @@ void UBurstMeshStateSwitcherComponent::TickComponent(
 	}
 
 	// 1/2/3 閿姛鑳戒繚鐣欙紱棰濆鐢?Leap 鎸ユ墜鍋氭鍙嶅悜寰幆鍒囨崲銆?
+	PollLeapGrabGestures(DeltaTime);
 	PollLeapSwipeGestures(DeltaTime);
 }
 
@@ -369,6 +369,8 @@ void UBurstMeshStateSwitcherComponent::BindLeapFrameDelegate(bool bForceRebind)
 	bWasLeapFrameStale = true;
 	bLeftHandPresent = false;
 	bRightHandPresent = false;
+	LeftGripStrength = 0.0f;
+	RightGripStrength = 0.0f;
 
 	if (bDebugLeapSwipe)
 	{
@@ -431,12 +433,14 @@ void UBurstMeshStateSwitcherComponent::OnLeapTrackingData(const FLeapFrameData& 
 			bLeftHandPresent = true;
 			LeftPalmVelocity = Hand.Palm.Velocity;
 			LeftHandConfidence = Hand.Confidence;
+			LeftGripStrength = EstimateGripStrength(Hand);
 		}
 		else if (Hand.HandType == LEAP_HAND_RIGHT)
 		{
 			bRightHandPresent = true;
 			RightPalmVelocity = Hand.Palm.Velocity;
 			RightHandConfidence = Hand.Confidence;
+			RightGripStrength = EstimateGripStrength(Hand);
 		}
 	}
 
@@ -445,6 +449,57 @@ void UBurstMeshStateSwitcherComponent::OnLeapTrackingData(const FLeapFrameData& 
 		UE_LOG(LogTemp, Display, TEXT("BurstMeshStateSwitcher: Leap frames recovered; hands=%d."),
 			Frame.Hands.Num());
 	}
+}
+
+void UBurstMeshStateSwitcherComponent::PollLeapGrabGestures(float DeltaTime)
+{
+	LeftHandGrabCooldown = FMath::Max(0.0f, LeftHandGrabCooldown - DeltaTime);
+	RightHandGrabCooldown = FMath::Max(0.0f, RightHandGrabCooldown - DeltaTime);
+
+	constexpr float LeapStaleTimeout = 0.25f;
+	if (TimeSinceLeapFrame > LeapStaleTimeout)
+	{
+		LeftGripStrength = 0.0f;
+		RightGripStrength = 0.0f;
+		bLeftGrabLatched = false;
+		bRightGrabLatched = false;
+	}
+
+	if (!bEnableLeapGrabCycle)
+	{
+		return;
+	}
+
+	if (!bAllowSwipeDuringTransition && IsTransitionInProgress())
+	{
+		return;
+	}
+
+	const auto PollHandGrab = [this](bool bHandPresent, float HandConfidence, float GripStrength,
+		bool& bGrabLatched, float& GrabCooldown, float& SwipeCooldown, const TCHAR* HandName)
+	{
+		const bool bGrabbed = bHandPresent && HandConfidence >= MinHandConfidence
+			&& GripStrength >= GrabTriggerThreshold;
+		if (bGrabbed && !bGrabLatched && GrabCooldown <= 0.0f)
+		{
+			UE_LOG(LogTemp, Display,
+				TEXT("BurstMeshStateSwitcher: leap grab cycle from %s hand strength=%.2f -> next state."),
+				HandName, GripStrength);
+			CycleModel(1);
+			bGrabLatched = true;
+			GrabCooldown = GrabCooldownSeconds;
+			SwipeCooldown = FMath::Max(SwipeCooldown, SwipeCooldownSeconds);
+		}
+		else if (GripStrength <= GrabReleaseThreshold)
+		{
+			bGrabLatched = false;
+		}
+	};
+
+	PollHandGrab(bLeftHandPresent, LeftHandConfidence, LeftGripStrength,
+		bLeftGrabLatched, LeftHandGrabCooldown, LeftHandSwipeCooldown, TEXT("left"));
+	PollHandGrab(bRightHandPresent, RightHandConfidence, RightGripStrength,
+		bRightGrabLatched, RightHandGrabCooldown, RightHandSwipeCooldown, TEXT("right"));
 }
 
 void UBurstMeshStateSwitcherComponent::PollLeapSwipeGestures(float DeltaTime)
@@ -509,6 +564,25 @@ bool UBurstMeshStateSwitcherComponent::IsLateralSwipe(const FVector& Velocity) c
 		return false;
 	}
 	return LateralAbs > FMath::Abs(Velocity.X) && LateralAbs > FMath::Abs(Velocity.Z);
+}
+
+float UBurstMeshStateSwitcherComponent::EstimateGripStrength(const FLeapHandData& Hand) const
+{
+	float CurlStrength = 0.0f;
+	if (Hand.Digits.Num() > 0)
+	{
+		int32 CurledFingerCount = 0;
+		for (const FLeapDigitData& Digit : Hand.Digits)
+		{
+			if (!Digit.IsExtended)
+			{
+				++CurledFingerCount;
+			}
+		}
+		CurlStrength = static_cast<float>(CurledFingerCount) / static_cast<float>(Hand.Digits.Num());
+	}
+
+	return FMath::Max3(Hand.GrabStrength, Hand.PinchStrength, CurlStrength);
 }
 
 void UBurstMeshStateSwitcherComponent::CycleModel(int32 Direction)
@@ -699,14 +773,6 @@ void UBurstMeshStateSwitcherComponent::DisableLegacyTriggerAndUI()
 	if (!Owner)
 	{
 		return;
-	}
-
-	TArray<UBoxComponent*> BoxComponents;
-	Owner->GetComponents(BoxComponents);
-	for (UBoxComponent* BoxComponent : BoxComponents)
-	{
-		BoxComponent->SetGenerateOverlapEvents(false);
-		BoxComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	}
 
 	TArray<UWidgetComponent*> WidgetComponents;

@@ -1,10 +1,65 @@
 #include "FistDisplayToggleComponent.h"
 
+#include "Components/SceneComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
 #include "Engine/World.h"
 #include "LeapSubsystem.h"
 #include "UltraleapTrackingData.h"
+
+namespace
+{
+FString NormalizeGroupToken(FString Value)
+{
+	Value.ToLowerInline();
+	Value.ReplaceInline(TEXT("_"), TEXT(""));
+	Value.ReplaceInline(TEXT("-"), TEXT(""));
+	Value.ReplaceInline(TEXT(" "), TEXT(""));
+	return Value;
+}
+
+bool IsFingerCurlingFallback(const FLeapHandData& Hand)
+{
+	if (Hand.GrabStrength > 0.0f || Hand.PinchStrength > 0.0f)
+	{
+		return false;
+	}
+
+	int32 KnownFingerCount = 0;
+	int32 CurledFingerCount = 0;
+	for (const FLeapDigitData& Digit : Hand.Digits)
+	{
+		++KnownFingerCount;
+		if (!Digit.IsExtended)
+		{
+			++CurledFingerCount;
+		}
+	}
+
+	return KnownFingerCount >= 4 && CurledFingerCount >= 4;
+}
+
+float EstimateFingerCurlStrength(const FLeapHandData& Hand)
+{
+	int32 KnownFingerCount = 0;
+	int32 CurledFingerCount = 0;
+	for (const FLeapDigitData& Digit : Hand.Digits)
+	{
+		++KnownFingerCount;
+		if (!Digit.IsExtended)
+		{
+			++CurledFingerCount;
+		}
+	}
+
+	if (KnownFingerCount <= 0)
+	{
+		return IsFingerCurlingFallback(Hand) ? 1.0f : 0.0f;
+	}
+
+	return static_cast<float>(CurledFingerCount) / static_cast<float>(KnownFingerCount);
+}
+} // namespace
 
 UFistDisplayToggleComponent::UFistDisplayToggleComponent()
 {
@@ -69,6 +124,11 @@ void UFistDisplayToggleComponent::ResolveGroups()
 			{
 				ManagedActors.Add(Actor);
 				ManagedActorGroups.Add(GroupIndex);
+				UE_LOG(LogTemp, Display, TEXT("FistDisplayToggle: group %d (%s) manages actor %s class %s."),
+					GroupIndex,
+					*DisplayGroupTags[GroupIndex].ToString(),
+					*GetNameSafe(Actor),
+					*GetNameSafe(Actor->GetClass()));
 				break;
 			}
 		}
@@ -89,13 +149,20 @@ bool UFistDisplayToggleComponent::ActorMatchesGroup(const AActor* Actor, FName G
 		return true;
 	}
 	const FString GroupString = GroupTag.ToString();
-#if WITH_EDITOR
-	if (Actor->GetActorLabel() == GroupString)
+	const FString NormalizedGroup = NormalizeGroupToken(GroupString);
+	for (const FName& ActorTag : Actor->Tags)
 	{
-		return true;
+		if (NormalizeGroupToken(ActorTag.ToString()) == NormalizedGroup)
+		{
+			return true;
+		}
 	}
-#endif
-	return Actor->GetName().Contains(GroupString);
+	// 不再用 GetActorLabel() 匹配：label 仅在带编辑器的构建(WITH_EDITOR)下有效，
+	// 打包后会被编译掉导致匹配不到（编辑器/Standalone 正常、打包失效）。
+	// 统一靠真 Tag 或对象名/类名匹配，保证编辑器与打包行为一致。
+	const FString NormalizedActorName = NormalizeGroupToken(Actor->GetName());
+	const FString NormalizedClassName = NormalizeGroupToken(GetNameSafe(Actor->GetClass()));
+	return NormalizedActorName.Contains(NormalizedGroup) || NormalizedClassName.Contains(NormalizedGroup);
 }
 
 void UFistDisplayToggleComponent::ShowGroup(int32 GroupIndex)
@@ -116,6 +183,19 @@ void UFistDisplayToggleComponent::ShowGroup(int32 GroupIndex)
 		}
 		const bool bVisible = (ManagedActorGroups[Index] == CurrentGroupIndex);
 		Actor->SetActorHiddenInGame(!bVisible);
+		Actor->SetActorEnableCollision(bVisible);
+
+		TArray<USceneComponent*> SceneComponents;
+		Actor->GetComponents(SceneComponents);
+		for (USceneComponent* SceneComponent : SceneComponents)
+		{
+			if (!SceneComponent)
+			{
+				continue;
+			}
+			SceneComponent->SetHiddenInGame(!bVisible, true);
+			SceneComponent->SetVisibility(bVisible, true);
+		}
 	}
 	UE_LOG(LogTemp, Display, TEXT("FistDisplayToggle: showing group %d (%s)."),
 		CurrentGroupIndex, *DisplayGroupTags[CurrentGroupIndex].ToString());
@@ -131,6 +211,8 @@ void UFistDisplayToggleComponent::OnLeapTrackingData(const FLeapFrameData& Frame
 	TimeSinceLeapFrame = 0.0f;
 	bHandTracked = false;
 	MaxGrabStrength = 0.0f;
+	MaxPinchStrength = 0.0f;
+	MaxFingerCurlStrength = 0.0f;
 	for (const FLeapHandData& Hand : Frame.Hands)
 	{
 		if (Hand.Confidence < MinHandConfidence)
@@ -139,6 +221,8 @@ void UFistDisplayToggleComponent::OnLeapTrackingData(const FLeapFrameData& Frame
 		}
 		bHandTracked = true;
 		MaxGrabStrength = FMath::Max(MaxGrabStrength, Hand.GrabStrength);
+		MaxPinchStrength = FMath::Max(MaxPinchStrength, Hand.PinchStrength);
+		MaxFingerCurlStrength = FMath::Max(MaxFingerCurlStrength, EstimateFingerCurlStrength(Hand));
 	}
 }
 
@@ -156,6 +240,8 @@ void UFistDisplayToggleComponent::TickComponent(
 	{
 		bHandTracked = false;
 		MaxGrabStrength = 0.0f;
+		MaxPinchStrength = 0.0f;
+		MaxFingerCurlStrength = 0.0f;
 	}
 
 	if (!bEnableFistToggle)
@@ -164,14 +250,21 @@ void UFistDisplayToggleComponent::TickComponent(
 	}
 
 	// 边沿检测：从"未握拳"变为"握拳"且冷却结束时切到下一组；需松开（降到 ReleaseThreshold 以下）才能再次触发。
-	const bool bFistClosed = bHandTracked && MaxGrabStrength >= FistGrabThreshold;
+	const float GestureStrength = FMath::Max3(MaxGrabStrength, MaxPinchStrength, MaxFingerCurlStrength);
+	const bool bFistClosed = bHandTracked && GestureStrength >= FistGrabThreshold;
 	if (bFistClosed && !bFistLatched && TriggerCooldown <= 0.0f)
 	{
+		UE_LOG(LogTemp, Display,
+			TEXT("FistDisplayToggle: grab trigger strength=%.2f grab=%.2f pinch=%.2f curl=%.2f."),
+			GestureStrength,
+			MaxGrabStrength,
+			MaxPinchStrength,
+			MaxFingerCurlStrength);
 		AdvanceGroup();
 		bFistLatched = true;
 		TriggerCooldown = TriggerCooldownSeconds;
 	}
-	else if (MaxGrabStrength < ReleaseThreshold)
+	else if (GestureStrength < ReleaseThreshold)
 	{
 		bFistLatched = false;
 	}
