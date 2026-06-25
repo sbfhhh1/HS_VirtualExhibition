@@ -37,7 +37,7 @@ struct BODYSTATE_API FNamedBoneData
 	FBodyStateBoneData Data;
 
 	UPROPERTY()
-	EBodyStateBasicBoneType Name;
+	EBodyStateBasicBoneType Name = EBodyStateBasicBoneType::BONE_ROOT;
 };
 
 // Used for replication
@@ -47,10 +47,10 @@ struct BODYSTATE_API FKeyedTransform
 	GENERATED_USTRUCT_BODY()
 
 	UPROPERTY()
-	FTransform Transform;
+	FTransform Transform = FTransform::Identity;
 
 	UPROPERTY()
-	EBodyStateBasicBoneType Name;
+	EBodyStateBasicBoneType Name = EBodyStateBasicBoneType::BONE_ROOT;
 };
 
 // Used for replication
@@ -63,7 +63,7 @@ struct BODYSTATE_API FNamedBoneMeta
 	FBodyStateBoneMeta Meta;
 
 	UPROPERTY()
-	EBodyStateBasicBoneType Name;
+	EBodyStateBasicBoneType Name = EBodyStateBasicBoneType::BONE_ROOT;
 };
 
 // Used for replication

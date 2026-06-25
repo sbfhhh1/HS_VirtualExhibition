@@ -172,20 +172,21 @@ bool ALeapHandActor::IsLeftHandFacingCamera(FLeapHandData Hand)
 
 void ALeapHandActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	Super::EndPlay(EndPlayReason);
-
-	// Unbind all the events 
+	// Unbind only this actor's handlers. Clearing the subsystem delegates here can
+	// remove unrelated grab/frame listeners in packaged builds.
 	if (LeapSubsystem != nullptr)
 	{
-		LeapSubsystem->OnLeapPinchMulti.Clear();
-		LeapSubsystem->OnLeapUnPinchMulti.Clear();
-		LeapSubsystem->OnLeapFrameMulti.Clear();
+		LeapSubsystem->OnLeapGrabNative.RemoveAll(this);
+		LeapSubsystem->OnLeapReleaseNative.RemoveAll(this);
+		LeapSubsystem->OnLeapFrameMulti.RemoveAll(this);
 	}
 
 	if (GetWorldTimerManager().IsTimerActive(TimerHandle))
 	{
 		GetWorldTimerManager().ClearTimer(TimerHandle);
 	}
+
+	Super::EndPlay(EndPlayReason);
 	
 }
 

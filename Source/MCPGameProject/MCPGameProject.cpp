@@ -8,4 +8,4 @@ void FMCPGameProjectModule::ShutdownModule()
 {
 }
 
-IMPLEMENT_MODULE(FMCPGameProjectModule, MCPGameProject)
+IMPLEMENT_PRIMARY_GAME_MODULE(FMCPGameProjectModule, MCPGameProject, "HS_VirtualExhibition")

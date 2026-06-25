@@ -76,6 +76,8 @@ private:
 
 	// Leap 帧回调缓存（游戏线程写、Tick 读）。
 	float MaxGrabStrength = 0.0f;
+	float MaxPinchStrength = 0.0f;
+	float MaxFingerCurlStrength = 0.0f;
 	bool bHandTracked = false;
 	float TimeSinceLeapFrame = 1000.0f;
 

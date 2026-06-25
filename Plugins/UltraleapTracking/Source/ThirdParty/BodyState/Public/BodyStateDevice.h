@@ -31,7 +31,7 @@ struct BODYSTATE_API FBodyStateDevice
 	GENERATED_USTRUCT_BODY()
 
 	UPROPERTY()
-	int32 DeviceId;
+	int32 DeviceId = 0;
 
 	UPROPERTY()
 	FBodyStateDeviceConfig Config;
@@ -39,5 +39,5 @@ struct BODYSTATE_API FBodyStateDevice
 	UPROPERTY()
 	class UBodyStateSkeleton* Skeleton = nullptr;
 
-	IBodyStateInputRawInterface* InputCallbackDelegate;
+	IBodyStateInputRawInterface* InputCallbackDelegate = nullptr;
 };

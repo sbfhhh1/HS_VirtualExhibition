@@ -13,6 +13,7 @@ class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class USoundBase;
 class UStaticMeshComponent;
+struct FLeapHandData;
 struct FLeapFrameData;
 
 USTRUCT(BlueprintType)
@@ -183,6 +184,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Burst Switcher|Leap Gesture")
 	bool bDebugLeapSwipe = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Burst Switcher|Leap Gesture")
+	bool bEnableLeapGrabCycle = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Burst Switcher|Leap Gesture", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float GrabTriggerThreshold = 0.75f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Burst Switcher|Leap Gesture", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float GrabReleaseThreshold = 0.45f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Burst Switcher|Leap Gesture", meta=(ClampMin="0.0"))
+	float GrabCooldownSeconds = 0.9f;
+
 	// ---------------- 妯″瀷鑷浆 ----------------
 	// 妯″瀷瀹屾暣鏄剧ず鏃剁粫绔栫洿杞达紙涓栫晫 Z 杞达級浠庡綋鍓嶈搴︾紦鎱㈣嚜杞紱闅愯棌鎴栧垏鎹㈣繃娓′腑涓嶈浆銆?
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Burst Switcher|Rotation")
@@ -306,6 +319,7 @@ private:
 	void SwitchToStateOne();
 	void SwitchToStateTwo();
 	void SwitchToStateThree();
+	void PollLeapGrabGestures(float DeltaTime);
 	void PollLeapSwipeGestures(float DeltaTime);
 	void UpdateModelRotation(float DeltaTime);
 	void InitializeInfoPanels();
@@ -337,6 +351,7 @@ private:
 	void RefreshLeapFrameDelegate(float DeltaTime);
 	// 鍒ゅ畾鎺屽績閫熷害鏄惁鏋勬垚涓€娆℃湁鏁堢殑姘村钩鎸ユ墜锛堥槇鍊?+ 姘村钩鍒嗛噺涓诲锛夈€?
 	bool IsLateralSwipe(const FVector& Velocity) const;
+	float EstimateGripStrength(const FLeapHandData& Hand) const;
 	// Leap 甯у洖璋冿紙娓告垙绾跨▼锛夛細浠呯紦瀛樺乏鍙虫墜鎺屽績閫熷害/缃俊搴︼紝瀹為檯鍒ゅ畾鏀惧湪 Tick 涓寜 DeltaTime 璧板喎鍗淬€?
 	void OnLeapTrackingData(const FLeapFrameData& Frame);
 
@@ -419,14 +434,20 @@ private:
 	// 姣忔墜鎸ユ墜鍐峰嵈鍓╀綑鏃堕棿锛堢锛夛紝宸﹀彸鎵嬬嫭绔嬭鏃躲€?
 	float LeftHandSwipeCooldown = 0.0f;
 	float RightHandSwipeCooldown = 0.0f;
+	float LeftHandGrabCooldown = 0.0f;
+	float RightHandGrabCooldown = 0.0f;
 
 	// Leap 甯у洖璋冪紦瀛樼殑鏈€鏂版墜閮ㄦ暟鎹紙娓告垙绾跨▼鍐欏叆锛孴ick 璇诲彇锛夈€?
 	FVector LeftPalmVelocity = FVector::ZeroVector;
 	FVector RightPalmVelocity = FVector::ZeroVector;
 	float LeftHandConfidence = 0.0f;
 	float RightHandConfidence = 0.0f;
+	float LeftGripStrength = 0.0f;
+	float RightGripStrength = 0.0f;
 	bool bLeftHandPresent = false;
 	bool bRightHandPresent = false;
+	bool bLeftGrabLatched = false;
+	bool bRightGrabLatched = false;
 	float TimeSinceLeapFrame = 1000.0f;
 	bool bWasLeapFrameStale = true;
 	FDelegateHandle LeapFrameDelegateHandle;

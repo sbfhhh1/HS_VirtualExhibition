@@ -3,6 +3,7 @@
 #include "RenderResource.h"
 #include "RenderingThread.h"
 #include "PrimitiveSceneProxy.h"
+#include "RHIResources.h"
 #include "SceneManagement.h"
 #include "DynamicMeshBuilder.h"
 #include "Materials/Material.h"
@@ -26,8 +27,10 @@ public:
 	virtual void InitRHI(FRHICommandListBase& RHICmdList) override
 	{
 		const uint32 Size = Positions.Num() * sizeof(FVector3f);
-		FRHIResourceCreateInfo CreateInfo(TEXT("BlenderGN_DynPosVB"));
-		VertexBufferRHI = RHICmdList.CreateBuffer(Size, BUF_Dynamic | BUF_VertexBuffer | BUF_ShaderResource, sizeof(FVector3f), ERHIAccess::VertexOrIndexBuffer | ERHIAccess::SRVMask, CreateInfo);
+		const FRHIBufferCreateDesc CreateDesc =
+			FRHIBufferCreateDesc::Create(TEXT("BlenderGN_DynPosVB"), Size, sizeof(FVector3f), BUF_Dynamic | BUF_VertexBuffer | BUF_ShaderResource)
+			.SetInitialState(ERHIAccess::VertexOrIndexBuffer | ERHIAccess::SRVMask);
+		VertexBufferRHI = RHICmdList.CreateBuffer(CreateDesc);
 		void* Data = RHICmdList.LockBuffer(VertexBufferRHI, 0, Size, RLM_WriteOnly);
 		FMemory::Memcpy(Data, Positions.GetData(), Size);
 		RHICmdList.UnlockBuffer(VertexBufferRHI);

@@ -15,8 +15,16 @@
 // Sets default values for this component's properties
 ULeapTeleportComponent::ULeapTeleportComponent() 
 	: LocalTeleportLaunchSpeed(1000)
+	, CameraComponent(nullptr)
+	, TeleportVisualizerReference(nullptr)
+	, LeapTeleportTraceNS(nullptr)
+	, TeleportTraceNSComponent(nullptr)
 	, bValidTeleportationLocation(false)
 	, bTeleportTraceActive(false)
+	, Owner(nullptr)
+	, WorldContextObject(nullptr)
+	, LeapSubsystem(nullptr)
+	, NavSys(nullptr)
 	, bTeleportOnce(true)
 {
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
@@ -74,6 +82,22 @@ void ULeapTeleportComponent::BeginPlay()
 		return;
 	}
 	
+}
+
+void ULeapTeleportComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (LeapSubsystem != nullptr)
+	{
+		LeapSubsystem->OnLeapGrabActionNative.RemoveAll(this);
+		LeapSubsystem->OnLeapReleaseNative.RemoveAll(this);
+	}
+
+	if (bTeleportTraceActive)
+	{
+		EndTeleportTrace();
+	}
+
+	Super::EndPlay(EndPlayReason);
 }
 
 void ULeapTeleportComponent::StartTeleportTrace()

@@ -479,12 +479,12 @@ void ULeapWidgetInteractionComponent::SpawnStaticMeshActor(const FVector& InLoca
 
 void ULeapWidgetInteractionComponent::CleanUpEvents()
 {
-	// Clean up the subsystem events
+	// Remove this component's subscriptions without disturbing other Leap listeners.
 	if (LeapSubsystem != nullptr)
 	{
-		LeapSubsystem->OnLeapFrameMulti.Clear();
-		LeapSubsystem->OnLeapPinchMulti.Clear();
-		LeapSubsystem->OnLeapUnPinchMulti.Clear();
+		LeapSubsystem->OnLeapFrameMulti.RemoveAll(this);
+		LeapSubsystem->OnLeapPinchMulti.RemoveAll(this);
+		LeapSubsystem->OnLeapUnPinchMulti.RemoveAll(this);
 		LeapSubsystem->SetUsePawnOrigin(false, nullptr);
 	}
 }
