@@ -18,6 +18,15 @@ DerivedDataCache/
 *.vcxproj*
 *.csproj*
 
+# IDE solution (new format) & root build output
+*.slnx
+/Build/
+
+# Loose debug/helper scripts (not part of the shippable project)
+/*.py
+/Plugins/UnrealMCP/*.py
+/Plugins/UnrealMCP/*.json
+
 # Other
 .DS_Store
 Thumbs.db
