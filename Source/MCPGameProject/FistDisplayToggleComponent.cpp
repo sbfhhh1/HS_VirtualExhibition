@@ -76,7 +76,9 @@ void UFistDisplayToggleComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	PrimaryComponentTick.TickInterval = FMath::Max(0.0f, GesturePollInterval);
+	// 每帧 Tick：保证键盘(WasInputKeyJustPressed 逐帧边沿触发)不被漏按；
+	// 手势仍靠 bFistLatched + 冷却防重复，每帧轮询缓存的 Leap 数据开销可忽略。
+	PrimaryComponentTick.TickInterval = 0.0f;
 	ResolveGroups();
 
 	if (ULeapSubsystem* LeapSubsystem = ULeapSubsystem::Get())
@@ -276,11 +278,11 @@ void UFistDisplayToggleComponent::TickComponent(
 	{
 		if (APlayerController* PlayerController = World->GetFirstPlayerController())
 		{
-			if (PlayerController->WasInputKeyJustPressed(EKeys::Four) && TriggerCooldown <= 0.0f)
+			// 键盘 4 键：边沿触发本身就是一次一切，不加冷却，确保每次按下都稳定 toggle。
+			if (PlayerController->WasInputKeyJustPressed(EKeys::Four))
 			{
-				UE_LOG(LogTemp, Display, TEXT("FistDisplayToggle: debug key '4' -> AdvanceGroup."));
+				UE_LOG(LogTemp, Display, TEXT("FistDisplayToggle: key '4' -> AdvanceGroup."));
 				AdvanceGroup();
-				TriggerCooldown = TriggerCooldownSeconds;
 			}
 		}
 	}

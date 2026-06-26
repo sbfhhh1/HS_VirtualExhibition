@@ -11,8 +11,9 @@ Logs/
 DerivedDataCache/
 *.pdb
 
-# Visual Studio
+# Visual Studio / JetBrains Rider
 .vs/
+.idea/
 *.sln
 *.suo
 *.vcxproj*
